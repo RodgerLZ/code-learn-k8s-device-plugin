@@ -310,6 +310,8 @@ func updateDeviceMapWithReplicas(replicatedResources *spec.ReplicatedResources, 
 			continue
 		}
 
+		// RL
+		// 首先将和当前 resourceName 不匹配的资源重新放入到 DeviceMap 中
 		// Add any devices we don't want replicated directly into the device map.
 		for _, d := range oDevices[r.Name].Difference(oDevices[r.Name].Subset(ids)) {
 			devices.insert(r.Name, d)
@@ -321,6 +323,8 @@ func updateDeviceMapWithReplicas(replicatedResources *spec.ReplicatedResources, 
 		if r.Rename != "" {
 			name = r.Rename
 		}
+		// RL
+		// 复制显卡，名字做了拼接，通常为 UUID::0 UUID::1 UUID::2 等
 		for _, id := range ids {
 			for i := 0; i < r.Replicas; i++ {
 				annotatedID := string(NewAnnotatedID(id, i))

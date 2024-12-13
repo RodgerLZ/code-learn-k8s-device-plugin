@@ -111,6 +111,9 @@ func main() {
 			Usage:   "ensure that containers are started with NVIDIA_MOFED=enabled",
 			EnvVars: []string{"MOFED_ENABLED"},
 		},
+		// RL
+		// 获取 kubelet socket 的地址，并传递给 options.kubeletSocket
+		// 可以从启动参数或者环境变量获取，如果都没有则从 pluginapi.KubeletSocket 获取默认值
 		&cli.StringFlag{
 			Name:        "kubelet-socket",
 			Value:       pluginapi.KubeletSocket,
@@ -236,6 +239,13 @@ func start(c *cli.Context, o *options) error {
 
 	kubeletSocketDir := filepath.Dir(o.kubeletSocket)
 	klog.Infof("Starting FS watcher for %v", kubeletSocketDir)
+	// RL
+	// 监听的是 kubelet socket 的目录
+	// # Watching directories
+	//
+	// All files in a directory are monitored, including new files that are created
+	// after the watcher is started. Subdirectories are not watched (i.e. it's
+	// non-recursive).
 	watcher, err := watch.Files(kubeletSocketDir)
 	if err != nil {
 		return fmt.Errorf("failed to create FS watcher for %s: %v", pluginapi.DevicePluginPath, err)
@@ -258,6 +268,8 @@ restart:
 	}
 
 	klog.Info("Starting Plugins.")
+	// RL
+	// todo
 	plugins, restartPlugins, err := startPlugins(c, o)
 	if err != nil {
 		return fmt.Errorf("error starting plugins: %v", err)
@@ -273,9 +285,16 @@ restart:
 	// some messages, trigger a restart of the plugins, or exit the program.
 	for {
 		select {
+		// RL
+		// 有部分 plugin 启动失败了，30秒之后重新尝试启动插件
+
 		// If the restart timeout has expired, then restart the plugins
 		case <-restartTimeout:
 			goto restart
+
+		// RL
+		// 通过监听 kubelet socket 文件是否重建来判断 kubelet 是否发生了重启
+		// kubelet 的插件信息是放在内存中的，重启后这些信息丢失了，需要 plugin 重启以重新注册
 
 		// Detect a kubelet restart by watching for a newly created
 		// 'pluginapi.KubeletSocket' file. When this occurs, restart this loop,
@@ -289,6 +308,9 @@ restart:
 		// Watch for any other fs errors and log them.
 		case err := <-watcher.Errors:
 			klog.Infof("inotify: %s", err)
+
+		// RL
+		// 监听系统信号，优雅退出或者重启
 
 		// Watch for any signals from the OS. On SIGHUP, restart this loop,
 		// restarting all of the plugins in the process. On all other
@@ -315,6 +337,8 @@ exit:
 func startPlugins(c *cli.Context, o *options) ([]plugin.Interface, bool, error) {
 	// Load the configuration file
 	klog.Info("Loading configuration.")
+	// RL
+	// 读取配置文件并反序列化，依据配置文件的内容对显卡做复制。NVIDIA Time Slicing
 	config, err := loadConfig(c, o.flags)
 	if err != nil {
 		return nil, false, fmt.Errorf("unable to load config: %v", err)

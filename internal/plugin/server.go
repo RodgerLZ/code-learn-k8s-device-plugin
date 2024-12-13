@@ -49,6 +49,7 @@ const (
 )
 
 // nvidiaDevicePlugin implements the Kubernetes device plugin API
+// 实现了 DevicePluginServer 接口，重点在于 ListAndWatch & Allocate
 type nvidiaDevicePlugin struct {
 	rm                   rm.ResourceManager
 	config               *spec.Config
@@ -123,6 +124,8 @@ func (plugin *nvidiaDevicePlugin) Devices() rm.Devices {
 
 // Start starts the gRPC server, registers the device plugin with the Kubelet,
 // and starts the device healthchecks.
+// RL
+// Start 向 kubelet 注册插件，同时启动了 gRPC 服务，用于接收 kubelet 的请求（用于资源的分配和绑定）
 func (plugin *nvidiaDevicePlugin) Start(kubeletSocket string) error {
 	plugin.initialize()
 
@@ -130,6 +133,7 @@ func (plugin *nvidiaDevicePlugin) Start(kubeletSocket string) error {
 		return fmt.Errorf("error waiting for MPS daemon: %w", err)
 	}
 
+	// 启动 grpc 服务
 	err := plugin.Serve()
 	if err != nil {
 		klog.Errorf("Could not start device plugin for '%s': %s", plugin.rm.Resource(), err)
@@ -138,6 +142,7 @@ func (plugin *nvidiaDevicePlugin) Start(kubeletSocket string) error {
 	}
 	klog.Infof("Starting to serve '%s' on %s", plugin.rm.Resource(), plugin.socket)
 
+	// 注册
 	err = plugin.Register(kubeletSocket)
 	if err != nil {
 		klog.Errorf("Could not register device plugin: %s", err)
@@ -145,6 +150,7 @@ func (plugin *nvidiaDevicePlugin) Start(kubeletSocket string) error {
 	}
 	klog.Infof("Registered device plugin for '%s' with Kubelet", plugin.rm.Resource())
 
+	// 新建一个 goroutine 用于检查 plugin 的健康状况，当发现设备异常的时候，通过 channel 通知
 	go func() {
 		// TODO: add MPS health check
 		err := plugin.rm.CheckHealth(plugin.stop, plugin.health)
@@ -178,6 +184,7 @@ func (plugin *nvidiaDevicePlugin) Serve() error {
 		return err
 	}
 
+	// 注册 device plugin 服务，指定了接口协议（参数等）
 	pluginapi.RegisterDevicePluginServer(plugin.server, plugin)
 
 	go func() {
@@ -303,6 +310,7 @@ func (plugin *nvidiaDevicePlugin) GetPreferredAllocation(ctx context.Context, r 
 func (plugin *nvidiaDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	responses := pluginapi.AllocateResponse{}
 	for _, req := range reqs.ContainerRequests {
+		// todo
 		if err := plugin.rm.ValidateRequest(req.DevicesIDs); err != nil {
 			return nil, fmt.Errorf("invalid allocation request for %q: %w", plugin.rm.Resource(), err)
 		}
@@ -317,6 +325,7 @@ func (plugin *nvidiaDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.
 }
 
 func (plugin *nvidiaDevicePlugin) getAllocateResponse(requestIds []string) (*pluginapi.ContainerAllocateResponse, error) {
+	// 根据配置，得到一个 gpu uuid list / gpu index list
 	deviceIDs := plugin.deviceIDsFromAnnotatedDeviceIDs(requestIds)
 
 	// Create an empty response that will be updated as required below.
@@ -485,6 +494,9 @@ func (plugin *nvidiaDevicePlugin) updateResponseForImexChannelsEnvVar(response *
 func (plugin *nvidiaDevicePlugin) updateResponseForDeviceMounts(response *pluginapi.ContainerAllocateResponse, deviceIDs ...string) {
 	plugin.updateResponseForDeviceListEnvVar(response, deviceListAsVolumeMountsContainerPathRoot)
 
+	// 疑问
+	// 这里挂载的 hostPath 都是  /dev/null，在 containerMountPath 上包含gpu UUID
+	// 是由 nvidia gpu runtime 来处理挂载的 hostPath 吗？
 	for _, id := range deviceIDs {
 		mount := &pluginapi.Mount{
 			HostPath:      deviceListAsVolumeMountsHostPath,

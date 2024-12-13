@@ -48,6 +48,7 @@ func NewNVMLResourceManagers(infolib info.Interface, nvmllib nvml.Interface, dev
 		}
 	}()
 
+	// 构建 deviceMap, key 是 resourceName, value 是 devices
 	deviceMap, err := NewDeviceMap(infolib, devicelib, config)
 	if err != nil {
 		return nil, fmt.Errorf("error building device map: %v", err)

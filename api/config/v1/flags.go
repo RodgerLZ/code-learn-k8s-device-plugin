@@ -31,6 +31,9 @@ func ptr[T any](x T) *T {
 // updateFromCLIFlag conditionally updates the config flag at 'pflag' to the value of the CLI flag with name 'flagName'
 func updateFromCLIFlag[T any](pflag **T, c *cli.Context, flagName string) {
 	if c.IsSet(flagName) || *pflag == (*T)(nil) {
+		// RL
+		// 这里是将 pflag 转换为 any 后进行类型断言；然后将 pflag 赋值给 flag
+		// 所以在后面具体的 case 块中，pflag 也被赋值了
 		switch flag := any(pflag).(type) {
 		case **string:
 			*flag = ptr(c.String(flagName))

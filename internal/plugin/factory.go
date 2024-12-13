@@ -52,6 +52,8 @@ func New(infolib info.Interface, nvmllib nvml.Interface, devicelib device.Interf
 		nvmllib:   nvmllib,
 		devicelib: devicelib,
 	}
+	// RL
+	// 函数式选项模式
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -65,6 +67,11 @@ func New(infolib info.Interface, nvmllib nvml.Interface, devicelib device.Interf
 		o.cdiHandler = cdi.NewNullHandler()
 	}
 
+	// RL
+	// getResourceManagers 返回 []rm.ResourceManager , 每一个 item 为 resourceManager, 包含了 device 设备信息
+	// 然后由 resourceManager 构建 plugin 的过程中，会将 rm 赋值到 plugin 的属性上，这样plugin 通过 rm 就可以获取到设备列表了
+	// 在 gRPC 服务的 ListAndWatch 接口上会用到这个设备列表
+	// 看上去这个列表应该只会在服务启动的时候构建，然后通过 goroutine 定期去巡检每个 device，ListAndWatch 通过 channel 获取到设备异常的通知，并通知到每个订阅的 client
 	resourceManagers, err := o.getResourceManagers()
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct resource managers: %w", err)
